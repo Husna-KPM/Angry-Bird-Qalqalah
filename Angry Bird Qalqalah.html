@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Angry Bird Qalqalah</title>
+<link href="https://fonts.googleapis.com/css2?family=Lateef:wght@400;700&family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f2233;--ink:#fff;--card:#fff8e1;--cardink:#3b2a14;--gold:#ffc83d;--red:#e53935;--green:#2e9e4f}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:'Fredoka',system-ui,'Segoe UI',sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#hud{display:flex;justify-content:space-between;align-items:center;gap:6px;width:var(--w);box-sizing:border-box;padding:3px 6px;font-weight:700;font-size:calc(var(--u)*1.9)}
+#hud span{background:rgba(255,255,255,.12);border-radius:20px;padding:2px 10px;white-space:nowrap}
+#mute{font-size:calc(var(--u)*2.2);background:rgba(255,255,255,.15);border:0;border-radius:50%;width:calc(var(--u)*4);height:calc(var(--u)*4);color:#fff;cursor:pointer}
+#stage{position:relative;width:var(--w);height:var(--h)}
+canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:12px;background:#8fd3ff}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(8,18,30,.78);border-radius:12px;padding:1.5%;box-sizing:border-box}
+.card{background:var(--card);color:var(--cardink);border-radius:18px;padding:2% 3%;max-width:94%;max-height:98%;overflow:auto;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.5);font-size:calc(var(--u)*1.9);line-height:1.35}
+.card h1{margin:0 0 .3em;font-size:calc(var(--u)*4.2);color:var(--red);text-shadow:0 2px 0 #fff}
+.card h2{margin:0 0 .3em;font-size:calc(var(--u)*3);color:var(--red)}
+.card ol{text-align:left;margin:.4em auto;padding-left:1.4em;max-width:90%}
+.card li{margin:.25em 0}
+.tip{background:#ffe9a8;border-radius:10px;padding:.3em .6em;margin:.5em 0;font-size:.92em}
+.btn{font-family:inherit;font-weight:700;font-size:calc(var(--u)*2.6);border:0;border-radius:40px;padding:.35em 1.4em;margin:.3em;color:#fff;background:linear-gradient(#ff5a4f,#d32f2f);box-shadow:0 5px 0 #8e1b1b;cursor:pointer;touch-action:manipulation}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8e1b1b}
+.ar{font-family:'Lateef','Scheherazade New','Traditional Arabic',serif;direction:rtl;unicode-bidi:isolate}
+.qtext{font-size:calc(var(--u)*6.6);line-height:1.7;margin:.1em 0 .2em;color:#1b3a2a}
+.ans{display:flex;gap:2%;justify-content:center;flex-wrap:wrap}
+.ans button{font-family:'Lateef','Scheherazade New','Traditional Arabic',serif;direction:rtl;font-size:calc(var(--u)*5);font-weight:700;border:0;border-radius:18px;padding:.15em .9em;min-width:36%;color:#fff;background:linear-gradient(#4b8bf5,#2a5fc9);box-shadow:0 5px 0 #173a85;cursor:pointer;touch-action:manipulation}
+.ans button.ok{background:linear-gradient(#4cc46a,#2e9e4f);box-shadow:0 5px 0 #1b6a32}
+.ans button.no{background:linear-gradient(#ff6b6b,#d32f2f);box-shadow:0 5px 0 #8e1b1b}
+.ans button:disabled{cursor:default}
+#fb{min-height:1.4em;font-weight:700;margin:.2em 0}
+.stars{font-size:calc(var(--u)*5)}
+</style>
+</head>
+<body>
+<div id="hud"><span id="hr"></span><span id="hs"></span><span id="hl"></span><span id="hb"></span><button id="mute" aria-label="Bunyi">🔊</button></div>
+<div id="stage"><canvas id="c" width="1920" height="1080"></canvas><div id="ov" class="ov"></div></div>
+<script>
+(function(){
+const W=960,H=540,GY=470,G=0.38,SL={x:150,y:385};
+const cv=document.getElementById('c'),cx=cv.getContext('2d'),ov=document.getElementById('ov');
+const Q=[
+["قُلْ هُوَ ٱللَّهُ أَحَدٌ","k"],
+["تَبَّتْ يَدَا أَبِي لَهَبٍ وَتَبَّ","k"],
+["أَلَمْ يَجْعَلْ كَيْدَهُمْ فِي تَضْلِيلٍ","s"],
+["الَّذِي أَطْعَمَهُم مِّن جُوعٍ","s"],
+["قُلْ أَعُوذُ بِرَبِّ ٱلْفَلَقِ","k"],
+["فَوَسَطْنَ بِهِ جَمْعًا","s"],
+["وَالْعَادِيَاتِ ضَبْحًا","s"],
+["وَالسَّمَاءِ ذَاتِ الْبُرُوجِ","k"]];
+const LBL={k:"قلقلة كبرى",s:"قلقلة صغرى"};
+/* ---------- Bunyi (WebAudio) ---------- */
+let AC=null,muted=false;
+function ac(){if(!AC){try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume();return AC}
+function tone(f1,f2,d,type,v,delay){const a=ac();if(!a||muted)return;const t=a.currentTime+(delay||0),o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f1,t);o.frequency.exponentialRampToValueAtTime(Math.max(f2,1),t+d);g.gain.setValueAtTime(v||.15,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+.03)}
+const S={
+pull:()=>tone(280,520,.18,'triangle',.12),
+launch:()=>{tone(1000,180,.4,'sawtooth',.1);tone(300,120,.2,'square',.07)},
+hit:()=>tone(170,60,.12,'square',.13),
+wood:()=>{tone(240,70,.16,'sawtooth',.1);tone(120,50,.1,'square',.1)},
+pig:()=>{tone(520,180,.12,'square',.14);tone(320,640,.1,'square',.12,.1);tone(760,140,.22,'sawtooth',.12,.2)},
+ok:()=>[523,659,784,1046].forEach((f,i)=>tone(f,f,.2,'triangle',.18,i*.1)),
+bad:()=>{tone(320,90,.55,'sawtooth',.16);tone(200,60,.5,'square',.1,.15)},
+win:()=>[392,523,659,784,1046,1318].forEach((f,i)=>tone(f,f,.25,'triangle',.18,i*.11)),
+lose:()=>[400,340,280,200].forEach((f,i)=>tone(f,f*.9,.3,'sawtooth',.13,i*.2)),
+click:()=>tone(600,800,.08,'square',.08)};
+document.getElementById('mute').onclick=function(){muted=!muted;this.textContent=muted?'🔇':'🔊';ac()};
+/* ---------- Keadaan ---------- */
+let st='menu',round=0,score=0,lives=5,birds=3,deck=[],blocks=[],pigs=[],bird=null,parts=[],drag=false,shake=0,t=0,banner=0,ending=false,fails=0;
+const $=id=>document.getElementById(id);
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function hud(){$('hr').textContent='Round '+Math.max(round,1)+'/10';$('hs').textContent='⭐ '+score;$('hl').textContent='❤'.repeat(Math.max(lives,0))+'🖤'.repeat(5-Math.max(lives,0));$('hb').textContent='🐦 ×'+birds}
+function resize(){const hh=$('hud').offsetHeight||34;let w=Math.min(innerWidth,(innerHeight-hh-6)*16/9);w=Math.max(w,200);const r=document.documentElement.style;r.setProperty('--w',w+'px');r.setProperty('--h',(w*9/16)+'px');r.setProperty('--u',(w/100)+'px')}
+addEventListener('resize',resize);addEventListener('orientationchange',()=>setTimeout(resize,200));
+/* ---------- Tahap ---------- */
+function buildLevel(r){
+blocks=[];pigs=[];
+const bl=(x,y,w,h,hp)=>blocks.push({x:x,y:y,w:w,h:h,hp:hp||20,vy:0,hit:0}),
+sn=(x,top)=>pigs.push({x:x,y:top-22,r:22,hp:9,vy:0,t:Math.random()*9}),
+tw=(x,n,w)=>{for(let k=0;k<n;k++)bl(x,GY-(k+1)*46,w,46)};
+const L={
+1:()=>{tw(680,1,56);sn(790,GY)},
+2:()=>{tw(735,2,56);sn(763,GY-92)},
+3:()=>{bl(690,410,30,60);bl(790,410,30,60);bl(680,386,150,24);sn(755,GY)},
+4:()=>{tw(622,3,56);sn(650,GY-138);bl(745,350,30,120,28);sn(850,GY)},
+5:()=>{tw(700,1,56);tw(756,1,56);tw(812,1,56);bl(728,378,56,46);bl(784,378,56,46);bl(756,332,56,46);sn(784,332);sn(900,GY)},
+6:()=>{bl(640,370,30,100);bl(740,370,30,100);bl(630,346,130,24);sn(695,346);bl(815,370,30,100);bl(895,370,30,100);bl(805,346,110,24);sn(855,GY)},
+7:()=>{tw(700,4,50);sn(725,GY-184);bl(620,390,30,80);bl(800,424,40,46);sn(870,GY)},
+8:()=>{tw(620,2,56);sn(648,GY-92);bl(720,400,30,70);bl(800,400,30,70);bl(710,376,130,24);sn(775,376);bl(850,380,30,90);sn(905,GY)},
+9:()=>{bl(680,380,30,90);bl(800,380,30,90);bl(670,356,160,24);bl(690,266,30,90);bl(780,266,30,90);bl(680,242,140,24);sn(750,242);sn(745,GY);sn(890,GY)},
+10:()=>{tw(640,5,50);sn(665,GY-230);bl(750,400,30,70);bl(830,400,30,70);bl(740,376,140,24);sn(810,376);sn(805,GY)}
+};
+(L[r]||L[3])();
+}
+function drawSnake(p){cx.save();cx.translate(p.x,p.y+Math.sin((t+p.t*10)/12)*.8);
+const c=p.hp<5?'#9ccc3c':'#3fa535';cx.lineCap='round';
+for(const e of [[0,9,16,8],[0,-2,11,6]]){cx.strokeStyle='#1f6b22';cx.lineWidth=14;cx.beginPath();cx.ellipse(e[0],e[1],e[2],e[3],0,0,7);cx.stroke();cx.strokeStyle=c;cx.lineWidth=10;cx.beginPath();cx.ellipse(e[0],e[1],e[2],e[3],0,0,7);cx.stroke()}
+cx.fillStyle='#ffd54f';for(let i=0;i<6;i++){const a=i*1.05;cx.beginPath();cx.arc(Math.cos(a)*16,9+Math.sin(a)*8,2.2,0,7);cx.fill()}
+cx.strokeStyle='#d32f2f';cx.lineWidth=2.5;const fl=Math.sin(t/5)*2;cx.beginPath();cx.moveTo(17,-12);cx.lineTo(25,-12);cx.lineTo(29,-15+fl);cx.moveTo(25,-12);cx.lineTo(29,-9-fl);cx.stroke();
+cx.fillStyle=c;cx.strokeStyle='#1f6b22';cx.lineWidth=2.5;cx.beginPath();cx.ellipse(5,-14,14,10,0,0,7);cx.fill();cx.stroke();
+cx.fillStyle='#fff';cx.beginPath();cx.arc(1,-17,5,0,7);cx.arc(11,-17,5,0,7);cx.fill();
+cx.fillStyle='#000';cx.beginPath();cx.ellipse(2,-17,1.4,3.6,0,0,7);cx.ellipse(12,-17,1.4,3.6,0,0,7);cx.fill();
+cx.strokeStyle='#000';cx.lineWidth=2;cx.beginPath();cx.moveTo(-4,-24);cx.lineTo(5,-20);cx.lineTo(15,-24);cx.stroke();
+cx.restore()}
+function spawn(){bird={x:SL.x,y:SL.y,vx:0,vy:0,r:16,fly:false,life:0,still:0};st='aim'}
+function startRound(){round++;birds=round>=7?4:3;ending=false;buildLevel(round);parts=[];spawn();banner=100;hud();ov.style.display='none'}
+/* ---------- Fizik ---------- */
+function burst(x,y,c,n){for(let i=0;i<n;i++)parts.push({x:x,y:y,vx:(Math.random()-.5)*7,vy:-Math.random()*6,l:30+Math.random()*20,c:c,s:2+Math.random()*4})}
+function killPig(p){pigs.splice(pigs.indexOf(p),1);burst(p.x,p.y,'#7bd34a',16);burst(p.x,p.y,'#fff',6);S.pig();shake=6;
+if(!pigs.length&&!ending){ending=true;setTimeout(()=>roundEnd(true),1100)}}
+function endBird(){bird=null;birds--;hud();
+if(!pigs.length)return;
+if(birds>0)spawn();else if(!ending){ending=true;setTimeout(()=>roundEnd(false),900)}}
+function step(){
+t++;
+if(st==='menu'&&!pigs.length)buildLevel(3);
+// blok
+for(const b of blocks){
+const sup=b.y+b.h>=GY-.5||blocks.some(o=>o!==b&&Math.abs(o.y-(b.y+b.h))<2&&b.x<o.x+o.w-1&&b.x+b.w>o.x+1);
+if(!sup){b.vy+=G;b.y+=b.vy;
+if(b.y+b.h>GY){b.y=GY-b.h;b.vy=0}
+for(const o of blocks){if(o!==b&&b.vy>0&&b.x<o.x+o.w-1&&b.x+b.w>o.x+1&&b.y+b.h>o.y&&b.y+b.h-b.vy<=o.y+4){b.y=o.y-b.h;b.vy=0}}}
+if(b.hit>0)b.hit--}
+// babi
+for(const p of pigs.slice()){
+p.vy+=G;p.y+=p.vy;
+let top=GY;
+for(const b of blocks){if(p.x>b.x-8&&p.x<b.x+b.w+8&&p.y+p.r>b.y&&p.y+p.r-p.vy<=b.y+8&&b.y<top)top=b.y}
+if(p.y+p.r>=top){if(p.vy>9){p.hp-=(p.vy-5)*2;S.hit()}p.y=top-p.r;p.vy=0}
+if(p.hp<=0)killPig(p)}
+// burung
+if(bird&&bird.fly){
+bird.vy+=G;bird.x+=bird.vx;bird.y+=bird.vy;bird.life++;
+if(bird.y+bird.r>GY){bird.y=GY-bird.r;if(Math.abs(bird.vy)>2)S.hit();bird.vy*=-.35;bird.vx*=.82;if(Math.abs(bird.vy)<1)bird.vy=0}
+for(const b of blocks){
+const px=Math.max(b.x,Math.min(bird.x,b.x+b.w)),py=Math.max(b.y,Math.min(bird.y,b.y+b.h));
+let dx=bird.x-px,dy=bird.y-py,d=Math.hypot(dx,dy);
+if(d<bird.r){if(d===0){dx=0;dy=-1;d=1}
+const nx=dx/d,ny=dy/d;bird.x+=nx*(bird.r-d);bird.y+=ny*(bird.r-d);
+const sp=Math.hypot(bird.vx,bird.vy),vn=bird.vx*nx+bird.vy*ny;
+if(vn<0){bird.vx-=1.4*vn*nx;bird.vy-=1.4*vn*ny}
+if(sp>3){b.hp-=sp;b.hit=6;S.wood();burst(px,py,'#c68642',4);
+if(b.hp<=0){b.dead=true;burst(b.x+b.w/2,b.y+b.h/2,'#c68642',12);bird.vx*=.75;bird.vy*=.75}}}}
+blocks=blocks.filter(b=>!b.dead);
+for(const p of pigs.slice()){
+const dx=bird.x-p.x,dy=bird.y-p.y,d=Math.hypot(dx,dy);
+if(d<bird.r+p.r){const sp=Math.hypot(bird.vx,bird.vy);
+if(sp>2.5)p.hp-=sp*1.2;S.hit();
+const nx=dx/(d||1),ny=dy/(d||1);bird.x=p.x+nx*(bird.r+p.r);bird.y=p.y+ny*(bird.r+p.r);bird.vx*=.6;bird.vy*=.6;
+burst(p.x,p.y,'#7bd34a',3);
+if(p.hp<=0)killPig(p)}}
+const sp=Math.hypot(bird.vx,bird.vy);
+if(bird.y+bird.r>=GY-1&&sp<.8)bird.still++;else bird.still=0;
+if(bird.still>40||bird.x>W+80||bird.x<-80||bird.life>700)endBird()}
+for(const q of parts){q.x+=q.vx;q.y+=q.vy;q.vy+=.3;q.l--}
+parts=parts.filter(q=>q.l>0);
+if(banner>0)banner--}
+/* ---------- Lukisan ---------- */
+function cloud(x,y,s){cx.beginPath();cx.arc(x,y,22*s,0,7);cx.arc(x+25*s,y-12*s,28*s,0,7);cx.arc(x+55*s,y,22*s,0,7);cx.arc(x+28*s,y+8*s,22*s,0,7);cx.fill()}
+function drawBird(x,y,r,rot){cx.save();cx.translate(x,y);cx.rotate(rot||0);
+cx.fillStyle='#e53935';cx.beginPath();cx.arc(0,0,r,0,7);cx.fill();
+cx.fillStyle='#b71c1c';cx.beginPath();cx.moveTo(-4,-r+2);cx.lineTo(-10,-r-9);cx.lineTo(0,-r-3);cx.lineTo(4,-r-11);cx.lineTo(6,-r+2);cx.fill();
+cx.fillStyle='#f5deb3';cx.beginPath();cx.ellipse(2,r*.45,r*.7,r*.5,0,0,7);cx.fill();
+cx.fillStyle='#fff';cx.beginPath();cx.arc(3,-3,5,0,7);cx.arc(10,-3,5,0,7);cx.fill();
+cx.fillStyle='#000';cx.beginPath();cx.arc(4.5,-2,2,0,7);cx.arc(11,-2,2,0,7);cx.fill();
+cx.strokeStyle='#000';cx.lineWidth=2.5;cx.beginPath();cx.moveTo(-1,-10);cx.lineTo(8,-5);cx.lineTo(16,-9);cx.stroke();
+cx.fillStyle='#ffc107';cx.beginPath();cx.moveTo(10,2);cx.lineTo(r+7,5);cx.lineTo(10,9);cx.fill();
+cx.restore()}
+function drawPig(p){cx.save();cx.translate(p.x,p.y+Math.sin((t+p.t*10)/12)*.8);
+const hurt=p.hp<5;
+cx.fillStyle=hurt?'#8bc34a':'#6bbf3a';cx.beginPath();cx.arc(0,0,p.r,0,7);cx.fill();
+cx.beginPath();cx.arc(-p.r+3,-p.r*.6,6,0,7);cx.arc(p.r-3,-p.r*.6,6,0,7);cx.fill();
+cx.fillStyle='#4f9a2a';cx.beginPath();cx.ellipse(0,5,10,8,0,0,7);cx.fill();
+cx.fillStyle='#2e6b14';cx.beginPath();cx.ellipse(-3.5,5,2,3.5,0,0,7);cx.ellipse(3.5,5,2,3.5,0,0,7);cx.fill();
+cx.fillStyle='#fff';cx.beginPath();cx.arc(-8,-6,5.5,0,7);cx.arc(8,-6,5.5,0,7);cx.fill();
+cx.fillStyle='#000';cx.beginPath();cx.arc(-7,-5,2.2,0,7);cx.arc(7,-5,2.2,0,7);cx.fill();
+if(hurt){cx.strokeStyle='#2e6b14';cx.lineWidth=2;cx.beginPath();cx.moveTo(-14,-14);cx.lineTo(-4,-10);cx.moveTo(14,-14);cx.lineTo(4,-10);cx.stroke()}
+cx.restore()}
+function drawBlock(b){cx.save();cx.translate(b.hit?(Math.random()-.5)*3:0,0);
+const dmg=b.hp<10;
+cx.fillStyle=dmg?'#b57a3d':'#d9a05b';cx.fillRect(b.x,b.y,b.w,b.h);
+cx.strokeStyle='#7a4a1c';cx.lineWidth=3;cx.strokeRect(b.x+1.5,b.y+1.5,b.w-3,b.h-3);
+cx.lineWidth=2;cx.beginPath();cx.moveTo(b.x+5,b.y+b.h/2);cx.lineTo(b.x+b.w-5,b.y+b.h/2);cx.stroke();
+if(dmg){cx.beginPath();cx.moveTo(b.x+10,b.y+4);cx.lineTo(b.x+22,b.y+22);cx.lineTo(b.x+16,b.y+b.h-4);cx.stroke()}
+cx.restore()}
+function traj(){
+let x=bird.x,y=bird.y,vx=(SL.x-bird.x)*.22,vy=(SL.y-bird.y)*.22;
+cx.fillStyle='rgba(255,255,255,.85)';
+for(let i=1;i<=42;i++){vy+=G;x+=vx;y+=vy;if(y>GY)break;if(i%3===0&&i<=36){cx.beginPath();cx.arc(x,y,4-i/18,0,7);cx.fill()}}}
+function draw(){
+cx.setTransform(2,0,0,2,0,0);
+if(shake>0){cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.85;if(shake<.3)shake=0}
+const g=cx.createLinearGradient(0,0,0,GY);g.addColorStop(0,'#5db8f0');g.addColorStop(1,'#d6f1ff');cx.fillStyle=g;cx.fillRect(-10,-10,W+20,H+20);
+cx.fillStyle='#fff3a0';cx.beginPath();cx.arc(840,80,40,0,7);cx.fill();
+cx.fillStyle='rgba(255,255,255,.9)';for(let i=0;i<4;i++)cloud(((i*330+t*.25)%1300)-150,70+(i%2)*60,1+(i%3)*.2);
+cx.fillStyle='#7cc36a';cx.beginPath();cx.arc(200,GY+70,230,Math.PI,0);cx.fill();
+cx.fillStyle='#63b05a';cx.beginPath();cx.arc(700,GY+90,280,Math.PI,0);cx.fill();
+cx.fillStyle='#6aa84f';cx.fillRect(-10,GY,W+20,H-GY+10);
+cx.fillStyle='#4e8c3a';cx.fillRect(-10,GY,W+20,8);
+cx.fillStyle='#7a5230';cx.fillRect(-10,GY+30,W+20,H);
+// burung menunggu
+const wait=bird&&!bird.fly?birds-1:birds;
+for(let i=0;i<Math.min(wait,3);i++)drawBird(70-i*34+ (i?0:0),GY-16,16,0);
+// ketapel
+cx.strokeStyle='#5b3a1a';cx.lineCap='round';cx.lineWidth=14;
+cx.beginPath();cx.moveTo(SL.x,GY);cx.lineTo(SL.x,SL.y+35);cx.stroke();
+cx.lineWidth=11;cx.beginPath();cx.moveTo(SL.x,SL.y+35);cx.lineTo(SL.x-16,SL.y-10);cx.moveTo(SL.x,SL.y+35);cx.lineTo(SL.x+16,SL.y-10);cx.stroke();
+if(bird&&!bird.fly){cx.strokeStyle='#3b1f0a';cx.lineWidth=6;cx.beginPath();cx.moveTo(SL.x-16,SL.y-8);cx.lineTo(bird.x-8,bird.y);cx.stroke();if(drag)traj()}
+blocks.forEach(drawBlock);pigs.forEach(drawSnake);
+if(bird){drawBird(bird.x,bird.y,bird.r,bird.fly?bird.life*.15:Math.atan2(SL.y-bird.y,SL.x-bird.x)*.3)}
+if(bird&&!bird.fly){cx.strokeStyle='#5b3a1a';cx.lineWidth=6;cx.beginPath();cx.moveTo(SL.x+16,SL.y-8);cx.lineTo(bird.x+8,bird.y);cx.stroke()}
+for(const q of parts){cx.globalAlpha=Math.min(1,q.l/20);cx.fillStyle=q.c;cx.fillRect(q.x,q.y,q.s,q.s)}cx.globalAlpha=1;
+if(banner>0&&st!=='menu'){cx.globalAlpha=Math.min(1,banner/30);cx.textAlign='center';cx.font='700 64px Fredoka,sans-serif';cx.lineWidth=8;cx.strokeStyle='#7a1010';cx.fillStyle='#ffc83d';
+cx.strokeText('Pusingan '+round,W/2,150);cx.fillText('Pusingan '+round,W/2,150);cx.globalAlpha=1}
+}
+/* ---------- Input ---------- */
+function pos(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+cv.addEventListener('pointerdown',e=>{ac();if(st!=='aim'||!bird||bird.fly)return;const p=pos(e);if(Math.hypot(p.x-bird.x,p.y-bird.y)<75){drag=true;try{cv.setPointerCapture(e.pointerId)}catch(_){}S.pull();e.preventDefault()}});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const p=pos(e);let dx=p.x-SL.x,dy=p.y-SL.y;const l=Math.hypot(dx,dy);if(l>90){dx*=90/l;dy*=90/l}
+bird.x=SL.x+dx;bird.y=Math.min(SL.y+dy,GY-bird.r)});
+function release(){if(!drag)return;drag=false;
+const dx=SL.x-bird.x,dy=SL.y-bird.y;
+if(Math.hypot(dx,dy)<18){bird.x=SL.x;bird.y=SL.y;return}
+bird.vx=dx*.22;bird.vy=dy*.22;bird.fly=true;st='fly';S.launch()}
+cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
+/* ---------- Skrin ---------- */
+function show(html){ov.innerHTML='<div class="card">'+html+'</div>';ov.style.display='flex'}
+function menu(){st='menu';round=0;score=0;lives=5;birds=3;bird=null;pigs=[];hud();
+show('<h1>🐦 Angry Bird Qalqalah</h1><h2>Arahan Permainan</h2><ol>'+
+'<li><b>Tarik</b> burung merah pada ketapel ke belakang, kemudian <b>lepaskan</b> untuk melancar. Titik putih menunjukkan arah lontaran.</li>'+
+'<li>Musnahkan <b>semua ular</b> dalam setiap round. Anda ada <b>3 burung</b> (4 burung bermula round 7). Setiap round mempunyai halangan yang berbeza.</li>'+
+'<li>Selepas setiap round, satu <b>soalan Qalqalah</b> akan muncul. Pilih <span class="ar">قلقلة كبرى</span> atau <span class="ar">قلقلة صغرى</span>.</li>'+
+'<li>Ada <b>10 round</b>. Jawapan betul = <b>10 markah</b> (markah penuh 100).</li>'+
+'<li>Anda ada <b>5 nyawa ❤</b>. Nyawa berkurang jika jawapan salah atau gagal memusnahkan ular. Jika nyawa habis, permainan terus tamat.</li></ol>'+
+'<div class="tip">💡 Huruf Qalqalah: <span class="ar">قطب جد</span></div>'+
+'<button class="btn" id="go">▶ Mula Main</button>');
+$('go').onclick=()=>{ac();S.click();deck=shuffle(Q).concat(shuffle(Q).slice(0,2));startRound()}}
+function roundEnd(won){st='between';
+if(won){S.win()}else{lives--;S.lose();fails++}
+hud();
+if(lives<=0){setTimeout(()=>finish(),600);return}
+showQuestion(won)}
+function showQuestion(won){
+const q=deck[round-1],opts=shuffle(['k','s']);
+show('<h2>'+(won?'🎉 Round '+round+' berjaya!':'💥 Round '+round+' gagal (-1 nyawa)')+'</h2><div class="ar qtext" lang="ar" dir="rtl">'+q[0]+'</div>'+
+'<div>Pilih jenis Qalqalah:</div><div class="ans" id="ans">'+opts.map(o=>'<button data-k="'+o+'" lang="ar">'+LBL[o]+'</button>').join('')+'</div><div id="fb"></div><div id="nx"></div>');
+document.querySelectorAll('#ans button').forEach(b=>b.onclick=()=>{
+ac();document.querySelectorAll('#ans button').forEach(x=>{x.disabled=true;if(x.dataset.k===q[1])x.classList.add('ok')});
+if(b.dataset.k===q[1]){score+=10;S.ok();$('fb').textContent='✅ Betul! +10 markah'}
+else{lives--;b.classList.add('no');S.bad();$('fb').textContent='❌ Salah! Jawapan: '+LBL[q[1]]+' (-1 nyawa)'}
+hud();
+if(lives<=0){$('fb').textContent+=' — Nyawa habis! Permainan tamat.';setTimeout(finish,1800);return}
+$('nx').innerHTML='<button class="btn" id="nb">'+(round>=10?'Lihat Keputusan ▶':'Round Seterusnya ▶')+'</button>';
+$('nb').onclick=()=>{S.click();if(lives<=0||round>=10)finish();else startRound()}})}
+function finish(){st='over';const alive=lives>0;const stars=score>=90?3:score>=60?2:score>=30?1:0;
+alive?S.win():S.lose();
+show('<h1>'+(alive?'🏆 Tahniah!':'😢 Nyawa Habis')+'</h1><div class="stars">'+'⭐'.repeat(stars)+'☆'.repeat(3-stars)+'</div>'+
+'<div style="font-size:1.5em;font-weight:700">Markah: '+score+' / 100</div>'+
+'<div>'+(score>=90?'Cemerlang! Anda pakar Qalqalah!':score>=60?'Bagus! Teruskan latihan.':'Jangan putus asa, cuba lagi!')+'</div>'+
+'<button class="btn" id="again">🔄 Main Semula</button>');
+$('again').onclick=()=>{S.click();menu()}}
+/* ---------- Mula ---------- */
+let last=0,acc=0;
+function loop(ts){const dt=Math.min(50,ts-last);last=ts;acc+=dt;while(acc>=16.67){step();acc-=16.67}draw();requestAnimationFrame(loop)}
+resize();buildLevel(3);menu();requestAnimationFrame(loop);
+setTimeout(resize,300);
+})();
+</script>
+</body>
+</html>
